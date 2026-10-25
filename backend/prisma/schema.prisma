@@ -1,0 +1,366 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+enum Role {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+enum ProductCondition {
+  NEW
+  USED
+  REFURBISHED
+}
+
+enum ProductStatus {
+  ACTIVE
+  SOLD
+  EXPIRED
+  CANCELLED
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum TransactionStatus {
+  PENDING_PAYMENT
+  PROCESSING
+  PAID
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  STRIPE
+  COD
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  PARTIALLY_PAID
+  COD_DUE
+  FAILED
+  PARTIALLY_REFUNDED
+  REFUNDED
+  DISPUTED
+}
+
+enum PaymentAttemptStatus {
+  CREATED
+  OPEN
+  PAID
+  FAILED
+  EXPIRED
+}
+
+enum PayoutStatus {
+  PENDING
+  SENT
+  FAILED
+  ON_HOLD
+}
+
+enum LedgerEntryType {
+  PAYMENT
+  COD_PAYMENT
+  COMMISSION
+  REFUND
+  PAYOUT
+  PAYOUT_REVERSAL
+  DISPUTE
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum ProductCategory {
+  ELECTRONICS
+  FASHION
+  HOME_AND_KITCHEN
+  BOOKS
+  SPORTS_AND_OUTDOORS
+  TOYS_AND_GAMES
+  COLLECTIBLES
+  VEHICLES
+  OTHER
+}
+
+model User {
+  id               String          @id @default(uuid())
+  email            String          @unique
+  passwordHash     String?
+  fullName         String
+  role             Role            @default(BUYER)
+  isSuspended      Boolean         @default(false)
+  isEmailVerified  Boolean         @default(true)
+  emailVerifiedAt  DateTime?       @default(now())
+  stripeConnectAccountId String?   @unique
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  products         Product[]       @relation("SellerProducts")
+  bids             Bid[]
+  offers           Offer[]
+  buyerOrders      Transaction[]   @relation("BuyerTransactions")
+  sellerOrders     Transaction[]   @relation("SellerTransactions")
+  refreshTokens    RefreshToken[]
+  financialEntries FinancialLedgerEntry[]
+  emailVerificationToken EmailVerificationToken?
+  submittedReports ListingReport[] @relation("Reporter")
+  reviewedReports  ListingReport[] @relation("ReportReviewer")
+  auditLogs        AuditLog[]      @relation("AuditActor")
+
+  @@index([role, createdAt])
+  @@index([isSuspended])
+}
+
+model EmailVerificationToken {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique
+  userId     String   @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model Product {
+  id                String           @id @default(uuid())
+  title             String
+  description       String           @db.Text
+  startingPrice     Decimal          @db.Decimal(12, 2)
+  currentHighestBid Decimal          @default(0) @db.Decimal(12, 2)
+  reservePrice      Decimal?         @db.Decimal(12, 2)
+  category          ProductCategory
+  condition         ProductCondition @default(USED)
+  status            ProductStatus    @default(ACTIVE)
+  auctionEndsAt     DateTime
+  allowDirectOffers Boolean          @default(true)
+  sellerId          String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  seller            User             @relation("SellerProducts", fields: [sellerId], references: [id], onDelete: Cascade)
+  images            ProductImage[]
+  bids              Bid[]
+  offers            Offer[]
+  transactions      Transaction[]
+  reports           ListingReport[]
+
+  @@index([status, auctionEndsAt])
+  @@index([category, status])
+  @@index([sellerId, createdAt])
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  url       String
+  productId String
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model Bid {
+  id        String   @id @default(uuid())
+  amount    Decimal  @db.Decimal(12, 2)
+  productId String
+  userId    String
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([productId, amount])
+  @@index([userId, createdAt])
+}
+
+model Offer {
+  id            String      @id @default(uuid())
+  offeredAmount Decimal     @db.Decimal(12, 2)
+  status        OfferStatus @default(PENDING)
+  productId     String
+  userId        String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([productId, status, createdAt])
+  @@index([userId, createdAt])
+}
+
+model Transaction {
+  id                String            @id @default(uuid())
+  productId         String            @unique
+  buyerId           String
+  sellerId          String
+  finalAmount       Decimal           @db.Decimal(12, 2)
+  paymentMethod     PaymentMethod?
+  paymentStatus     PaymentStatus     @default(PENDING)
+  paidAmount        Decimal           @default(0) @db.Decimal(12, 2)
+  refundedAmount    Decimal           @default(0) @db.Decimal(12, 2)
+  commissionAmount  Decimal           @default(0) @db.Decimal(12, 2)
+  sellerNetAmount   Decimal           @default(0) @db.Decimal(12, 2)
+  paidAt            DateTime?
+  completedAt       DateTime?
+  status            TransactionStatus @default(PENDING_PAYMENT)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  product           Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  buyer             User              @relation("BuyerTransactions", fields: [buyerId], references: [id], onDelete: Restrict)
+  seller            User              @relation("SellerTransactions", fields: [sellerId], references: [id], onDelete: Restrict)
+  paymentAttempts   PaymentAttempt[]
+  financialEntries  FinancialLedgerEntry[]
+  payout            SellerPayout?
+  disputes          PaymentDispute[]
+
+  @@index([buyerId, createdAt])
+  @@index([sellerId, createdAt])
+  @@index([status, createdAt])
+  @@index([paymentStatus, paidAt])
+  @@index([status, completedAt])
+}
+
+model PaymentAttempt {
+  id                      String              @id @default(uuid())
+  transactionId           String
+  stripeCheckoutSessionId String?             @unique
+  stripePaymentIntentId   String?             @unique
+  stripeCheckoutUrl       String?
+  amount                  Decimal             @db.Decimal(12, 2)
+  currency                String              @default("eur")
+  status                  PaymentAttemptStatus @default(CREATED)
+  failureCode             String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  transaction             Transaction         @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId, createdAt])
+  @@index([status, createdAt])
+}
+
+model StripeWebhookEvent {
+  id          String   @id @default(uuid())
+  stripeEventId String @unique
+  type        String
+  processedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([type, createdAt])
+}
+
+model FinancialLedgerEntry {
+  id            String          @id @default(uuid())
+  transactionId String
+  userId        String
+  type          LedgerEntryType
+  amount        Decimal         @db.Decimal(12, 2)
+  currency      String          @default("eur")
+  reference     String          @unique
+  metadata      Json?
+  createdAt     DateTime        @default(now())
+  transaction   Transaction     @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  user          User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([transactionId, createdAt])
+  @@index([type, createdAt])
+}
+
+model SellerPayout {
+  id                String      @id @default(uuid())
+  transactionId     String      @unique
+  stripeTransferId  String?     @unique
+  amount            Decimal     @db.Decimal(12, 2)
+  currency          String      @default("eur")
+  status            PayoutStatus @default(PENDING)
+  scheduledAt       DateTime
+  sentAt            DateTime?
+  failureCode       String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  transaction       Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([status, scheduledAt])
+}
+
+model PaymentDispute {
+  id                     String      @id @default(uuid())
+  transactionId          String
+  stripeDisputeId        String      @unique
+  status                 String
+  amount                 Decimal     @db.Decimal(12, 2)
+  currency               String
+  reason                 String?
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+  transaction            Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId, createdAt])
+  @@index([status, createdAt])
+}
+
+model RefreshToken {
+  id                  String    @id @default(uuid())
+  tokenHash           String    @unique
+  replacedByTokenHash String?
+  userId              String
+  expiresAt           DateTime
+  revokedAt           DateTime?
+  createdAt           DateTime  @default(now())
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model ListingReport {
+  id         String       @id @default(uuid())
+  productId  String
+  reporterId String
+  reviewerId String?
+  reason     String       @db.Text
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime     @default(now())
+  reviewedAt DateTime?
+  product    Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  reporter   User         @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reviewer   User?        @relation("ReportReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([productId, status])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([targetType, targetId])
+  @@index([actorId, createdAt])
+}

@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgb(2 132 199 / 20%);
+}
+
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+  background-color: rgb(var(--color-bg));
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--color-line));
+  border-radius: 6px;
+  transition: background-color 0.3s ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--color-sage-dark));
+}
+
+*::-webkit-scrollbar-corner {
+  background-color: rgb(var(--color-bg));
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--color-line)) rgb(var(--color-bg));
+}
+
+@layer components {
+  .field {
+    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 aria-[invalid=true]:border-red-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500;
+  }
+
+  .admin-table {
+    @apply min-w-full divide-y divide-slate-200 text-left text-sm dark:divide-slate-800;
+  }
+
+  .admin-table thead {
+    @apply bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-950;
+  }
+
+  .admin-table th {
+    @apply whitespace-nowrap px-4 py-3 font-semibold;
+  }
+
+  .admin-table td {
+    @apply max-w-sm border-t border-slate-100 px-4 py-4 align-top dark:border-slate-800;
+  }
+}

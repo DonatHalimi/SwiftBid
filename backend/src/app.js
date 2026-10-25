@@ -1,0 +1,47 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import rateLimit from 'express-rate-limit';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { env, isProduction } from './config/env.js';
+import { uploadRoot } from './middleware/upload.js';
+import authRoutes from './routes/auth.routes.js';
+import productRoutes from './routes/product.routes.js';
+import bidRoutes from './routes/bid.routes.js';
+import offerRoutes from './routes/offer.routes.js';
+import dashboardRoutes from './routes/dashboard.routes.js';
+import transactionRoutes from './routes/transaction.routes.js';
+import adminRoutes from './routes/admin.routes.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { originGuard } from './middleware/originGuard.js';
+import { stripeWebhook } from './controllers/payments.controller.js';
+
+const app = express();
+app.disable('x-powered-by');
+if (isProduction) app.set('trust proxy', 1);
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(cors({ origin: env.FRONTEND_URL, credentials: true, methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type'] }));
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhook);
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(cookieParser(env.COOKIE_SECRET));
+app.use('/uploads', express.static(uploadRoot, { maxAge: isProduction ? '1d' : 0, immutable: false, index: false }));
+
+const generalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: { code: 'RATE_LIMITED', message: 'Too many requests. Please try again later.' } } });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: { code: 'AUTH_RATE_LIMITED', message: 'Too many authentication attempts. Please try again later.' } } });
+app.use('/api', originGuard, generalLimiter);
+app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'ankand-api', timestamp: new Date().toISOString() }));
+app.use('/static', express.static(path.join(__dirname, '..', 'public')));
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/products', bidRoutes);
+app.use('/api/products', offerRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/admin', adminRoutes);
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+export default app;

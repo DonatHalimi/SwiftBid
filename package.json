@@ -1,0 +1,29 @@
+{
+  "name": "ankand-marketplace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time auctions and instant-offer marketplace monorepo",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n API,WEB -c blue,green \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
+    "build": "npm run build --workspace frontend",
+    "start": "concurrently -k -n API,WEB -c blue,green \"npm run start --workspace backend\" \"npm run dev --workspace frontend\"",
+    "db:generate": "npm run db:generate --workspace backend",
+    "db:migrate": "npm run db:migrate --workspace backend",
+    "db:deploy": "npm run db:deploy --workspace backend",
+    "db:studio": "npm run db:studio --workspace backend",
+    "test": "npm run test --workspace backend",
+    "check": "npm run check --workspace backend && npm run check --workspace frontend",
+    "package:zip": "node scripts/package-zip.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  },
+  "engines": {
+    "node": ">=20.11.0",
+    "npm": ">=10.2.0"
+  }
+}
